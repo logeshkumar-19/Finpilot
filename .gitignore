@@ -1,0 +1,28 @@
+# Ignore environment variable files
+.env
+.env.*
+!.env.example
+
+# Ignore Node/frontend dependencies and builds
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Ignore Java build target
+target/
+*.class
+
+# Temporary / testing files
+backend/test.js
+backend/test.json
+
+# IDEs/Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
