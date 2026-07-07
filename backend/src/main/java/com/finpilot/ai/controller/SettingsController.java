@@ -71,27 +71,42 @@ public class SettingsController {
         response.put("memberSince", user.getCreatedAt());
         response.put("accountType", user.getAccountType());
         
-        // Calculated previous month financial summary
+        // Calculated previous month financial summary (all from real data)
         response.put("previousMonthIncome", prevIncome);
         response.put("previousMonthExpense", prevExpense);
         response.put("previousMonthSavings", prevSavings);
-        response.put("savingsPercentage", prevSavingsRate);
-        response.put("financialHealthScore", prevIncome.compareTo(java.math.BigDecimal.ZERO) == 0 ? 0 : 82); 
-        response.put("expenseBreakdown", Map.of(
-            "Food", 1200,
-            "Shopping", 800,
-            "Bills", 600,
-            "Transportation", 400,
-            "Others", 520
-        ));
-        response.put("aiInsight", prevIncome.compareTo(java.math.BigDecimal.ZERO) == 0 ? "No financial data available yet." : String.format("Last month you saved %s%% of your income. Keep up the good work!", prevSavingsRate));
-        response.put("journeyCard", Map.of(
-            "currentStreak", "18 Days",
-            "bestSavingMonth", "June",
-            "highestSpendingCategory", "Food",
-            "mostImprovedCategory", "Shopping",
-            "currentGoalProgress", "Laptop Fund - 68%",
-            "aiRecommendation", "Reducing one weekend food delivery each week can help you reach your savings goal approximately two weeks earlier."
+        response.put("savingsPercentage", prevIncome.compareTo(java.math.BigDecimal.ZERO) == 0 ? null : prevSavingsRate);
+        response.put("financialHealthScore", null); // Computed by spending profile engine, not hardcoded
+
+        // Real expense breakdown from previous month data
+        java.util.Map<String, java.math.BigDecimal> realBreakdown = expenses.stream()
+            .filter(e -> e.getTransactionDate().getMonthValue() == prevMonth && e.getTransactionDate().getYear() == prevYear)
+            .collect(java.util.stream.Collectors.groupingBy(
+                e -> e.getCategory() != null ? e.getCategory() : "Others",
+                java.util.stream.Collectors.reducing(java.math.BigDecimal.ZERO, com.finpilot.ai.model.Expense::getAmount, java.math.BigDecimal::add)
+            ));
+        response.put("expenseBreakdown", realBreakdown.isEmpty() ? null : realBreakdown);
+
+        // AI insight from real savings data only
+        if (prevIncome.compareTo(java.math.BigDecimal.ZERO) == 0) {
+            response.put("aiInsight", null);
+        } else if (prevSavings.compareTo(java.math.BigDecimal.ZERO) > 0) {
+            response.put("aiInsight", String.format("Last month you saved ₹%s (%.1f%% of your income). Great discipline!",
+                prevSavings.setScale(0, java.math.RoundingMode.HALF_UP), prevSavingsRate));
+        } else {
+            response.put("aiInsight", String.format("Last month your expenses exceeded your income by ₹%s. Consider reviewing your spending.",
+                prevSavings.negate().setScale(0, java.math.RoundingMode.HALF_UP)));
+        }
+
+        // Journey card: computed from real data only
+        String highestSpendingCat = realBreakdown.entrySet().stream()
+            .max(java.util.Map.Entry.comparingByValue())
+            .map(java.util.Map.Entry::getKey).orElse(null);
+        long totalExpenseCount = expenses.size();
+        response.put("journeyCard", java.util.Map.of(
+            "totalExpenses", totalExpenseCount,
+            "highestSpendingCategory", highestSpendingCat != null ? highestSpendingCat : "N/A",
+            "hasData", totalExpenseCount > 0
         ));
 
         return ResponseEntity.ok(response);
@@ -117,23 +132,21 @@ public class SettingsController {
         if (user == null) return ResponseEntity.status(401).build();
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
-            return ResponseEntity.badRequest().body("Incorrect current password");
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", "Incorrect current password"));
         }
 
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-            return ResponseEntity.badRequest().body("New passwords do not match");
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", "New passwords do not match"));
         }
 
-        // Basic validation logic (8 chars, 1 upper, 1 lower, 1 number, 1 special)
-        String passwordPattern = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!])(?=\\S+$).{8,}$";
-        if (!request.getNewPassword().matches(passwordPattern)) {
-            return ResponseEntity.badRequest().body("Password does not meet security requirements.");
+        if (!AuthController.isValidPassword(request.getNewPassword())) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", "Password must contain at least one uppercase letter, one lowercase letter, one number, one special character, and be at least 8 characters long."));
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        return ResponseEntity.ok("Password changed successfully");
+        return ResponseEntity.ok(java.util.Map.of("message", "Password changed successfully"));
     }
 
     @GetMapping("/preferences")

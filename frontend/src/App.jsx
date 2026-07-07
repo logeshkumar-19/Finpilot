@@ -6,7 +6,7 @@ import {
   TrendingUp, TrendingDown, DollarSign, Calendar, PieChart as PieIcon,
   Award, MessageSquare, Sparkles, Settings, Mic, FileText, Plus,
   Target, Activity, AlertTriangle, Bell, User, LogOut, Trash2,
-  Info, Clock, Compass, ArrowRight, RefreshCw, Zap, HelpCircle, Eye, EyeOff
+  Info, Clock, Compass, ArrowRight, RefreshCw, Zap, HelpCircle, Eye, EyeOff, Brain
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -29,7 +29,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [notifyMessage, setNotifyMessage] = useState(null);
-  
+
   // --- Monthly Income State ---
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showIncomeBanner, setShowIncomeBanner] = useState(false);
@@ -39,8 +39,8 @@ export default function App() {
 
   // --- Authentication Form State ---
   const [isLogin, setIsLogin] = useState(true);
-  const [authEmail, setAuthEmail] = useState('demo@finpilot.ai');
-  const [authPassword, setAuthPassword] = useState('password123');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authIncome, setAuthIncome] = useState('0');
   const [authError, setAuthError] = useState('');
@@ -136,10 +136,10 @@ export default function App() {
     if (!modalIncome) return;
     setLoading(true);
     try {
-      await api.post('/income', { 
-        income: parseFloat(modalIncome), 
+      await api.post('/income', {
+        income: parseFloat(modalIncome),
         salaryDate: parseInt(modalSalaryDate),
-        incomeType: modalIncomeType 
+        incomeType: modalIncomeType
       });
       showNotification('Monthly income saved!', 'success');
       setShowIncomeModal(false);
@@ -149,6 +149,17 @@ export default function App() {
       showNotification(err.response?.data?.error || 'Failed to save income.', 'error');
       setLoading(false);
     }
+  };
+
+  // Password validation helper
+  const checkPasswordConditions = (pass) => {
+    return {
+      minLength: pass.length >= 8,
+      hasUpper: /[A-Z]/.test(pass),
+      hasLower: /[a-z]/.test(pass),
+      hasDigit: /[0-9]/.test(pass),
+      hasSpecial: /[!@#$%^&*()_+\-=\[\]{}|;:',.<>?]/.test(pass)
+    };
   };
 
   const handleAuth = async (e) => {
@@ -168,7 +179,7 @@ export default function App() {
         saveAuth(res.data);
       }
     } catch (err) {
-      setAuthError(err.response?.data || 'Connection to backend failed. Make sure Spring Boot is running.');
+      setAuthError(err.response?.data?.message || err.response?.data || 'Connection to backend failed. Make sure Spring Boot is running.');
     }
   };
 
@@ -379,6 +390,9 @@ export default function App() {
     }
   };
 
+  const authPasswordConditions = checkPasswordConditions(authPassword);
+  const isAuthPasswordValid = Object.values(authPasswordConditions).every(Boolean);
+
   // --- Auth View (Rendered when unauthorized) ---
   if (!token) {
     return (
@@ -446,6 +460,41 @@ export default function App() {
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              {!isLogin && (
+                <div className="password-requirements-box mt-3 p-3 rounded bg-slate-800/40 border border-slate-800 text-xs space-y-1">
+                  <p className="text-slate-400 font-semibold mb-2">Password Requirements:</p>
+                  <div className="flex items-center gap-2">
+                    <span className={authPasswordConditions.minLength ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                      {authPasswordConditions.minLength ? "✓" : "○"}
+                    </span>
+                    <span className={authPasswordConditions.minLength ? "text-slate-300" : "text-slate-400"}>Minimum 8 characters</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={authPasswordConditions.hasUpper ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                      {authPasswordConditions.hasUpper ? "✓" : "○"}
+                    </span>
+                    <span className={authPasswordConditions.hasUpper ? "text-slate-300" : "text-slate-400"}>At least one uppercase letter (A–Z)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={authPasswordConditions.hasLower ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                      {authPasswordConditions.hasLower ? "✓" : "○"}
+                    </span>
+                    <span className={authPasswordConditions.hasLower ? "text-slate-300" : "text-slate-400"}>At least one lowercase letter (a–z)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={authPasswordConditions.hasDigit ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                      {authPasswordConditions.hasDigit ? "✓" : "○"}
+                    </span>
+                    <span className={authPasswordConditions.hasDigit ? "text-slate-300" : "text-slate-400"}>At least one numeric digit (0–9)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={authPasswordConditions.hasSpecial ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                      {authPasswordConditions.hasSpecial ? "✓" : "○"}
+                    </span>
+                    <span className={authPasswordConditions.hasSpecial ? "text-slate-300" : "text-slate-400"}>At least one special character (!@#$%^&*()_+-=[]{}|;:',.&lt;&gt;?)</span>
+                  </div>
+                </div>
+              )}
             </div>
             {!isLogin && (
               <div className="auth-form-group">
@@ -460,7 +509,12 @@ export default function App() {
                 />
               </div>
             )}
-            <button type="submit" className="auth-submit-btn">
+            <button 
+              type="submit" 
+              className="auth-submit-btn"
+              disabled={!isLogin && !isAuthPasswordValid}
+              style={(!isLogin && !isAuthPasswordValid) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+            >
               <span>{isLogin ? 'Sign In' : 'Create Account'}</span>
               <ArrowRight size={16} />
             </button>
@@ -475,8 +529,8 @@ export default function App() {
             </button>
             {isLogin && (
               <div className="auth-demo-hint">
-                <p>💡 <span className="font-medium text-slate-400">Quick Developer Login:</span></p>
-                <p className="mt-0.5">Use email <strong>demo@finpilot.ai</strong> and password <strong>password123</strong> to experience the sandbox immediately with rich pre-loaded data.</p>
+                <p>💡 <span className="font-medium text-slate-400">Developer Sandbox:</span></p>
+                <p className="mt-0.5">Use email <strong>demo@finpilot.ai</strong> and password <strong>FinPilot@123</strong> to instantly explore the app with pre-loaded data.</p>
               </div>
             )}
           </div>
@@ -499,7 +553,7 @@ export default function App() {
               <h2 className="text-2xl font-bold text-white tracking-tight">Welcome!</h2>
               <p className="text-slate-400">Please enter your income for {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })} to receive accurate AI financial insights.</p>
             </div>
-            
+
             <form onSubmit={handleIncomeSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Monthly Income (₹)</label>
@@ -526,9 +580,9 @@ export default function App() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Income Type (Optional)</label>
-                <select 
-                  value={modalIncomeType} 
-                  onChange={(e) => setModalIncomeType(e.target.value)} 
+                <select
+                  value={modalIncomeType}
+                  onChange={(e) => setModalIncomeType(e.target.value)}
                   className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-5 py-3.5 text-white text-lg font-medium focus:outline-none focus:border-[#00d4ff]"
                 >
                   <option value="">Select Income Type...</option>
@@ -642,7 +696,7 @@ export default function App() {
           <div className="space-y-6">
             <div className="dashboard-header">
               <div>
-                <h2 className="dashboard-title">Intelligent Decision Center</h2>
+                <h2 className="dashboard-title">🎉Welcome!</h2>
                 <p className="dashboard-subtitle">Real-time health score, smart transaction processing & metrics</p>
               </div>
 
@@ -703,13 +757,21 @@ export default function App() {
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative col-span-1 flex flex-col justify-between">
                 <div>
                   <h3 className="text-slate-400 font-semibold mb-2 uppercase tracking-wider text-xs">Monthly Income</h3>
-                  <div className="text-3xl font-bold text-[#00d4ff] mb-1">₹{dashboard?.monthlyIncomeBudget || monthlyIncome}</div>
+                  <div className="text-3xl font-bold text-[#00d4ff] mb-1">
+                    ₹{dashboard?.monthlyIncomeBudget || '0'}
+                  </div>
                   <div className="text-sm font-medium text-slate-300">{new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}</div>
-                  <div className="text-[10px] text-slate-500 mt-4 uppercase tracking-wider font-semibold">Last Updated</div>
-                  <div className="text-xs text-slate-400">{dashboard?.monthlyIncomeLastUpdated ? new Date(dashboard.monthlyIncomeLastUpdated).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}) : 'Never'}</div>
+                  {dashboard?.monthlyIncomeBudget > 0 ? (
+                    <>
+                      <div className="text-[10px] text-slate-500 mt-4 uppercase tracking-wider font-semibold">Last Updated</div>
+                      <div className="text-xs text-slate-400">{dashboard?.monthlyIncomeLastUpdated ? new Date(dashboard.monthlyIncomeLastUpdated).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Never'}</div>
+                    </>
+                  ) : (
+                    <div className="mt-4 text-xs text-orange-400 font-medium">⚠ No income set for this month</div>
+                  )}
                 </div>
                 <button onClick={() => setShowIncomeModal(true)} className="mt-5 w-full bg-slate-800 hover:bg-slate-700 text-white py-2.5 rounded-xl text-sm font-bold transition-colors border border-slate-700">
-                  Edit Income
+                  {dashboard?.monthlyIncomeBudget > 0 ? 'Edit Income' : '+ Add Income'}
                 </button>
               </div>
 
@@ -717,18 +779,35 @@ export default function App() {
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-center">
                 <h3 className="text-slate-400 font-semibold mb-2 uppercase tracking-wider text-xs">Total Expenses</h3>
                 <div className="text-3xl font-bold text-[#ef4444]">₹{dashboard?.monthlySpent || '0'}</div>
+                {dashboard?.totalTransactionCount > 0 && (
+                  <div className="text-xs text-slate-500 mt-2">{dashboard.totalTransactionCount} transaction{dashboard.totalTransactionCount !== 1 ? 's' : ''}</div>
+                )}
               </div>
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-center">
                 <h3 className="text-slate-400 font-semibold mb-2 uppercase tracking-wider text-xs">Savings</h3>
-                <div className="text-3xl font-bold text-[#10b981]">₹{dashboard?.monthlySavings || '0'}</div>
+                {dashboard?.monthlyIncomeBudget > 0 ? (
+                  <div className={`text-3xl font-bold ${dashboard.monthlySavings >= 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>₹{dashboard.monthlySavings || '0'}</div>
+                ) : (
+                  <div className="text-2xl font-bold text-slate-500">N/A</div>
+                )}
               </div>
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-center">
                 <h3 className="text-slate-400 font-semibold mb-2 uppercase tracking-wider text-xs">Savings Rate</h3>
-                <div className="text-3xl font-bold text-white">{dashboard?.savingsRate || '0'}%</div>
+                {dashboard?.savingsRate != null ? (
+                  <div className="text-3xl font-bold text-white">{dashboard.savingsRate}%</div>
+                ) : (
+                  <div className="text-2xl font-bold text-slate-500">N/A</div>
+                )}
+                {dashboard?.savingsRate == null && <div className="text-xs text-slate-600 mt-1">Add income to track</div>}
               </div>
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-center">
                 <h3 className="text-slate-400 font-semibold mb-2 uppercase tracking-wider text-xs">Financial Health</h3>
-                <div className="text-3xl font-bold text-[#8b5cf6]">{dashboard?.healthScore || '--'} / 100</div>
+                {dashboard?.healthScore != null ? (
+                  <div className="text-3xl font-bold text-[#8b5cf6]">{dashboard.healthScore} / 100</div>
+                ) : (
+                  <div className="text-2xl font-bold text-slate-500">N/A</div>
+                )}
+                {dashboard?.healthScore == null && <div className="text-xs text-slate-600 mt-1">Needs 10+ transactions</div>}
               </div>
             </div>
 
@@ -737,7 +816,16 @@ export default function App() {
                 <div className="health-score-container">
                   <div>
                     <h3 className="dashboard-card-label">Financial Health Score</h3>
-                    <p className="dashboard-card-sub">{dashboard?.healthScoreExplanation || 'Processing variables...'}</p>
+                    {dashboard?.healthScore != null ? (
+                      <p className="dashboard-card-sub">{dashboard.healthScoreExplanation}</p>
+                    ) : (
+                      <p className="dashboard-card-sub text-slate-600">
+                        {dashboard?.totalTransactionCount >= 10
+                          ? 'Set your income to unlock your score.'
+                          : `Add ${Math.max(0, 10 - (dashboard?.totalTransactionCount || 0))} more transaction${(10 - (dashboard?.totalTransactionCount || 0)) !== 1 ? 's' : ''} to unlock AI insights.`
+                        }
+                      </p>
+                    )}
                   </div>
                   <div className="health-score-ring">
                     <svg viewBox="0 0 80 80">
@@ -748,10 +836,13 @@ export default function App() {
                         r="34"
                         className="health-score-ring-fg"
                         strokeDasharray="213.6"
-                        strokeDashoffset={213.6 - (213.6 * (dashboard?.healthScore || 80)) / 100}
+                        strokeDashoffset={213.6 - (213.6 * (dashboard?.healthScore || 0)) / 100}
+                        style={{ opacity: dashboard?.healthScore != null ? 1 : 0.15 }}
                       />
                     </svg>
-                    <span className="health-score-number">{dashboard?.healthScore || '--'}</span>
+                    <span className="health-score-number" style={{ color: dashboard?.healthScore != null ? undefined : '#475569' }}>
+                      {dashboard?.healthScore != null ? dashboard.healthScore : '--'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -764,22 +855,135 @@ export default function App() {
                   <div>
                     <div className="personality-header">
                       <h3 className="dashboard-card-label">AI Spending Personality</h3>
-                      <span className="personality-badge">{dashboard?.personalityType || 'Analysing'}</span>
+                      {dashboard?.personalityType ? (
+                        <span className="personality-badge">{dashboard.personalityType}</span>
+                      ) : (
+                        <span className="personality-badge" style={{ opacity: 0.5 }}>Pending</span>
+                      )}
                     </div>
-                    <p className="personality-text">{dashboard?.personalityExplanation || 'Evaluating long-term behavioral trends...'}</p>
+                    {dashboard?.personalityExplanation ? (
+                      <p className="personality-text">{dashboard.personalityExplanation}</p>
+                    ) : (
+                      <p className="personality-text text-slate-600">
+                        Your spending personality will be revealed after you log at least 10 transactions. Start by adding your first expense using the input bar above.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Lifestyle Spending Analysis Section */}
+            <div className="dashboard-grid">
+              <div className="dashboard-card dashboard-card-full bg-gradient-to-br from-slate-900 via-purple-950/20 to-slate-900 border border-slate-800/80 rounded-2xl p-6 animate-in fade-in slide-in-from-bottom duration-300">
+                <h3 className="dashboard-card-label flex items-center gap-2 mb-4 text-[#8b5cf6] text-lg font-bold">
+                  <Brain size={22} className="text-[#8b5cf6] animate-pulse" />
+                  <span>🧠 Lifestyle Spending Analysis</span>
+                </h3>
+
+                {!dashboard?.hasEnoughData ? (
+                  <div className="text-center py-10">
+                    <div className="text-4xl mb-3">📊</div>
+                    <p className="font-semibold text-slate-300 mb-2">Not enough data yet</p>
+                    <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                      Your personalized AI analysis unlocks after you log at least <span className="text-[#8b5cf6] font-bold">10 transactions</span> and set your monthly income.
+                      You currently have <span className="text-white font-bold">{dashboard?.totalTransactionCount || 0}</span> transaction{(dashboard?.totalTransactionCount || 0) !== 1 ? 's' : ''}.
+                    </p>
+                    <button
+                      onClick={() => document.querySelector('.expense-input-bar input')?.focus()}
+                      className="mt-5 bg-[#8b5cf6]/20 border border-[#8b5cf6]/30 text-[#c084fc] px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#8b5cf6]/30 transition-colors"
+                    >
+                      + Add Your First Expense
+                    </button>
+                  </div>
+                ) : dashboard?.lifestyleAnalysis ? (
+                  <div className="space-y-6 animate-in fade-in duration-500">
+                    {/* Archetype Badge */}
+                    <div className="flex items-center gap-3 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/30 w-fit">
+                      <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Spending Personality:</span>
+                      <span className="bg-[#8b5cf6]/20 text-[#c084fc] px-3 py-1 rounded-full text-xs font-bold border border-[#8b5cf6]/30">
+                        {dashboard.lifestyleAnalysis.personalityType}
+                      </span>
+                      <span className="text-xs text-slate-500">|</span>
+                      <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Wellness Score:</span>
+                      <span className="text-emerald-400 font-bold text-xs">{dashboard.lifestyleAnalysis.wellnessScore}/100</span>
+                    </div>
+
+                    {/* AI Summary */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]" />
+                        AI Summary
+                      </h4>
+                      <p className="text-sm text-slate-300 leading-relaxed bg-slate-950/50 p-4 rounded-xl border border-slate-850">
+                        {dashboard.lifestyleAnalysis.aiSummary}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Positive Financial Habits */}
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Positive Financial Habits
+                        </h4>
+                        <div className="text-sm text-slate-300 bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-xl leading-relaxed flex items-start gap-2.5">
+                          <span className="text-emerald-400 text-base font-bold">✅</span>
+                          <span>{dashboard.lifestyleAnalysis.positiveHabit}</span>
+                        </div>
+                      </div>
+
+                      {/* Areas That Need Improvement */}
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                          Areas That Need Improvement
+                        </h4>
+                        <div className="text-sm text-slate-300 bg-orange-500/5 border border-orange-500/10 p-4 rounded-xl leading-relaxed flex items-start gap-2.5">
+                          <span className="text-orange-400 text-base font-bold">⚠</span>
+                          <span>{dashboard.lifestyleAnalysis.improvementSuggestion}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* AI Recommendation */}
+                    <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
+                        AI Recommendation
+                      </h4>
+                      <div className="text-sm text-slate-300 bg-slate-950/40 p-4 rounded-xl border border-slate-900 flex items-start gap-2.5">
+                        <span className="text-[#10b981] text-base font-bold">💰</span>
+                        <div>
+                          <span className="italic">"{dashboard.lifestyleAnalysis.savingsOpportunity}"</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-slate-500">
+                    <p className="font-medium text-slate-400 mb-1">Generating your analysis...</p>
+                    <p className="text-xs">This may take a moment on first load.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="dashboard-grid">
               <div className="dashboard-card dashboard-card-full">
                 <div className="monthly-story">
                   <div>
                     <h3 className="dashboard-card-label mb-3">AI Monthly Story Summary</h3>
-                    <p className="monthly-story-text">"{dashboard?.monthlyStory || 'No story generated for this ledger cycle yet.'}"</p>
+                    {dashboard?.monthlyStory ? (
+                      <p className="monthly-story-text">"{dashboard.monthlyStory}"</p>
+                    ) : (
+                      <p className="monthly-story-text" style={{ color: '#475569', fontStyle: 'normal' }}>
+                        Your monthly story appears here once you've added income and started logging transactions. Use the expense input bar above to get started.
+                      </p>
+                    )}
                   </div>
                   <div className="monthly-story-meta">
-                    <span>💼 Monthly Income Budget: ₹{monthlyIncome}</span>
+                    <span>💼 Monthly Income Budget: ₹{dashboard?.monthlyIncomeBudget || '0'}</span>
                     <span>🎯 Goals Active: {dashboard?.goalsCount || '0'}</span>
                   </div>
                 </div>
@@ -1257,10 +1461,10 @@ export default function App() {
 
         {/* --- VIEW TAB D: SETTINGS --- */}
         {activeTab === 'settings' && (
-          <SettingsDashboard 
-            token={token} 
-            onLogout={handleLogout} 
-            showNotification={showNotification} 
+          <SettingsDashboard
+            token={token}
+            onLogout={handleLogout}
+            showNotification={showNotification}
           />
         )}
       </main>

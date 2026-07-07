@@ -57,6 +57,19 @@ export default function SettingsDashboard({ token, onLogout, showNotification })
     }
   };
 
+  const checkPasswordConditions = (pass) => {
+    return {
+      minLength: pass.length >= 8,
+      hasUpper: /[A-Z]/.test(pass),
+      hasLower: /[a-z]/.test(pass),
+      hasDigit: /[0-9]/.test(pass),
+      hasSpecial: /[!@#$%^&*()_+\-=\[\]{}|;:',.<>?]/.test(pass)
+    };
+  };
+
+  const newPasswordConditions = checkPasswordConditions(newPassword);
+  const isNewPasswordValid = Object.values(newPasswordConditions).every(Boolean);
+
   const handleChangePassword = async (e) => {
     e.preventDefault();
     try {
@@ -68,7 +81,7 @@ export default function SettingsDashboard({ token, onLogout, showNotification })
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      showNotification(err.response?.data || 'Failed to update password.', 'error');
+      showNotification(err.response?.data?.message || err.response?.data || 'Failed to update password.', 'error');
     }
   };
 
@@ -245,28 +258,42 @@ export default function SettingsDashboard({ token, onLogout, showNotification })
                   <div className="flex flex-col gap-4 mt-2">
                     <div className="flex justify-between items-center">
                       <span className="text-slate-400 text-lg">Financial Health Score</span>
-                      <span className="text-white font-bold text-xl">{profileData.financialHealthScore}<span className="text-slate-500 text-sm">/100</span></span>
+                      {profileData.financialHealthScore != null ? (
+                        <span className="text-white font-bold text-xl">{profileData.financialHealthScore}<span className="text-slate-500 text-sm">/100</span></span>
+                      ) : (
+                        <span className="text-slate-500 font-semibold text-lg">N/A</span>
+                      )}
                     </div>
                     <div className="w-full bg-slate-800 rounded-full h-3">
-                      <div className="bg-gradient-to-r from-[#00d4ff] to-[#8b5cf6] h-3 rounded-full transition-all duration-1000 ease-out" style={{ width: `${profileData.financialHealthScore}%` }} />
+                      <div className="bg-gradient-to-r from-[#00d4ff] to-[#8b5cf6] h-3 rounded-full transition-all duration-1000 ease-out" style={{ width: `${profileData.financialHealthScore || 0}%`, opacity: profileData.financialHealthScore != null ? 1 : 0.2 }} />
                     </div>
+                    {profileData.financialHealthScore == null && (
+                      <p className="text-xs text-slate-600">Health score is calculated from your spending patterns after 10+ transactions.</p>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Expense Breakdown Card */}
               <div className="bg-slate-900 rounded-2xl p-8 border border-slate-800/80 shadow-lg shadow-black/20 flex flex-col">
-                <h4 className="text-xl font-bold text-white mb-8 tracking-tight">Expense Breakdown</h4>
+                <h4 className="text-xl font-bold text-white mb-8 tracking-tight">Previous Month Expense Breakdown</h4>
                 <div className="flex flex-col gap-5 flex-1 justify-center">
-                  {Object.entries(profileData.expenseBreakdown || {}).map(([category, amount], i) => (
-                    <div key={category} className="flex justify-between items-center py-2">
-                      <div className="flex items-center gap-4">
-                        <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: ['#00d4ff', '#8b5cf6', '#10b981', '#f97316', '#ef4444'][i % 5] }} />
-                        <span className="text-slate-300 text-lg">{category}</span>
+                  {profileData.expenseBreakdown && Object.keys(profileData.expenseBreakdown).length > 0 ? (
+                    Object.entries(profileData.expenseBreakdown).map(([category, amount], i) => (
+                      <div key={category} className="flex justify-between items-center py-2">
+                        <div className="flex items-center gap-4">
+                          <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: ['#00d4ff', '#8b5cf6', '#10b981', '#f97316', '#ef4444'][i % 5] }} />
+                          <span className="text-slate-300 text-lg">{category}</span>
+                        </div>
+                        <span className="text-white font-semibold text-lg">₹{Number(amount).toFixed(0)}</span>
                       </div>
-                      <span className="text-white font-semibold text-lg">₹{amount}</span>
+                    ))
+                  ) : (
+                    <div className="text-center py-6">
+                      <p className="text-slate-500 text-base">No expenses recorded last month.</p>
+                      <p className="text-slate-600 text-sm mt-1">Start logging transactions to see your breakdown.</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -278,38 +305,38 @@ export default function SettingsDashboard({ token, onLogout, showNotification })
                     <Cpu className="text-[#8b5cf6]" size={24} />
                     <span>AI Financial Insight</span>
                   </h4>
-                  <p className="text-slate-300 leading-loose text-lg font-medium pr-8">
-                    "{profileData.aiInsight}"
-                  </p>
+                  {profileData.aiInsight ? (
+                    <p className="text-slate-300 leading-loose text-lg font-medium pr-8">
+                      "{profileData.aiInsight}"
+                    </p>
+                  ) : (
+                    <p className="text-slate-600 text-base">
+                      Your AI insight will appear here once you have income and expense data from last month. Add your monthly income and log transactions to get personalized observations.
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/* Financial Journey Card */}
               <div className="bg-slate-900 rounded-2xl p-8 border border-slate-800/80 shadow-lg shadow-black/20 lg:col-span-2">
-                <h4 className="text-xl font-bold text-white mb-8 tracking-tight">Financial Journey Milestones</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-10">
-                  <div className="p-6 bg-slate-800/50 rounded-2xl flex flex-col justify-center">
-                    <span className="block text-sm text-slate-400 mb-3 font-semibold uppercase tracking-wider">Current Streak</span>
-                    <span className="block text-2xl font-bold text-white">{profileData.journeyCard.currentStreak}</span>
+                <h4 className="text-xl font-bold text-white mb-8 tracking-tight">Financial Journey Stats</h4>
+                {profileData.journeyCard?.hasData ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
+                    <div className="p-6 bg-slate-800/50 rounded-2xl flex flex-col justify-center">
+                      <span className="block text-sm text-slate-400 mb-3 font-semibold uppercase tracking-wider">Total Transactions</span>
+                      <span className="block text-2xl font-bold text-white">{profileData.journeyCard.totalExpenses}</span>
+                    </div>
+                    <div className="p-6 bg-slate-800/50 rounded-2xl flex flex-col justify-center">
+                      <span className="block text-sm text-slate-400 mb-3 font-semibold uppercase tracking-wider">Highest Spending Category</span>
+                      <span className="block text-2xl font-bold text-[#ef4444]">{profileData.journeyCard.highestSpendingCategory}</span>
+                    </div>
                   </div>
-                  <div className="p-6 bg-slate-800/50 rounded-2xl flex flex-col justify-center">
-                    <span className="block text-sm text-slate-400 mb-3 font-semibold uppercase tracking-wider">Best Saving Month</span>
-                    <span className="block text-2xl font-bold text-[#10b981]">{profileData.journeyCard.bestSavingMonth}</span>
+                ) : (
+                  <div className="text-center py-10">
+                    <p className="text-slate-500 text-base">No transaction history yet.</p>
+                    <p className="text-slate-600 text-sm mt-1">Your financial journey milestones will appear here as you log expenses.</p>
                   </div>
-                  <div className="p-6 bg-slate-800/50 rounded-2xl flex flex-col justify-center">
-                    <span className="block text-sm text-slate-400 mb-3 font-semibold uppercase tracking-wider">Highest Spending</span>
-                    <span className="block text-2xl font-bold text-[#ef4444]">{profileData.journeyCard.highestSpendingCategory}</span>
-                  </div>
-                  <div className="p-6 bg-slate-800/50 rounded-2xl flex flex-col justify-center">
-                    <span className="block text-sm text-slate-400 mb-3 font-semibold uppercase tracking-wider">Most Improved</span>
-                    <span className="block text-2xl font-bold text-[#00d4ff]">{profileData.journeyCard.mostImprovedCategory}</span>
-                  </div>
-                </div>
-                
-                <div className="p-8 bg-gradient-to-r from-[#8b5cf6]/10 to-[#00d4ff]/10 rounded-2xl border border-[#8b5cf6]/20">
-                  <span className="block text-sm text-[#8b5cf6] font-bold mb-4 uppercase tracking-wider">Goal Acceleration Recommendation</span>
-                  <p className="text-slate-300 text-lg leading-relaxed">{profileData.journeyCard.aiRecommendation}</p>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -345,7 +372,39 @@ export default function SettingsDashboard({ token, onLogout, showNotification })
                     required
                     className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-5 py-3.5 text-white text-base focus:outline-none focus:border-[#8b5cf6] focus:bg-slate-800 transition-colors"
                   />
-                  <p className="text-sm text-slate-500 mt-3 font-medium">Require 8+ chars, 1 uppercase, 1 lowercase, 1 number, 1 special char.</p>
+                  <div className="password-requirements-box mt-3 p-3 rounded bg-slate-800/40 border border-slate-800 text-xs space-y-1">
+                    <p className="text-slate-400 font-semibold mb-2">Password Requirements:</p>
+                    <div className="flex items-center gap-2">
+                      <span className={newPasswordConditions.minLength ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                        {newPasswordConditions.minLength ? "✓" : "○"}
+                      </span>
+                      <span className={newPasswordConditions.minLength ? "text-slate-300" : "text-slate-400"}>Minimum 8 characters</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={newPasswordConditions.hasUpper ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                        {newPasswordConditions.hasUpper ? "✓" : "○"}
+                      </span>
+                      <span className={newPasswordConditions.hasUpper ? "text-slate-300" : "text-slate-400"}>At least one uppercase letter (A–Z)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={newPasswordConditions.hasLower ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                        {newPasswordConditions.hasLower ? "✓" : "○"}
+                      </span>
+                      <span className={newPasswordConditions.hasLower ? "text-slate-300" : "text-slate-400"}>At least one lowercase letter (a–z)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={newPasswordConditions.hasDigit ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                        {newPasswordConditions.hasDigit ? "✓" : "○"}
+                      </span>
+                      <span className={newPasswordConditions.hasDigit ? "text-slate-300" : "text-slate-400"}>At least one numeric digit (0–9)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={newPasswordConditions.hasSpecial ? "text-emerald-400 font-bold" : "text-slate-500"}>
+                        {newPasswordConditions.hasSpecial ? "✓" : "○"}
+                      </span>
+                      <span className={newPasswordConditions.hasSpecial ? "text-slate-300" : "text-slate-400"}>At least one special character (!@#$%^&*()_+-=[]{}|;:',.&lt;&gt;?)</span>
+                    </div>
+                  </div>
                 </div>
                 
                 <div className="flex flex-col gap-2 pt-2">
@@ -360,7 +419,12 @@ export default function SettingsDashboard({ token, onLogout, showNotification })
                 </div>
                 
                 <div className="pt-6">
-                  <button type="submit" className="w-full flex justify-center items-center gap-3 bg-[#8b5cf6] text-white px-8 py-4 rounded-xl font-bold hover:bg-[#7c3aed] transition-colors text-base shadow-lg shadow-[#8b5cf6]/20">
+                  <button 
+                    type="submit" 
+                    className="w-full flex justify-center items-center gap-3 bg-[#8b5cf6] text-white px-8 py-4 rounded-xl font-bold hover:bg-[#7c3aed] transition-colors text-base shadow-lg shadow-[#8b5cf6]/20"
+                    disabled={!isNewPasswordValid}
+                    style={!isNewPasswordValid ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                  >
                     <Shield size={20} />
                     <span>Update Secure Password</span>
                   </button>

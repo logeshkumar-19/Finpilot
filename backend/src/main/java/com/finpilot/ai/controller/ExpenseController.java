@@ -26,6 +26,14 @@ public class ExpenseController {
     private final ExpenseRepository expenseRepository;
     private final UserRepository userRepository;
     private final AIService aiService;
+    private final LifestyleAnalysisRepository lifestyleAnalysisRepository;
+
+    private void invalidateLifestyleAnalysisCache(User user) {
+        lifestyleAnalysisRepository.findByUserId(user.getId()).ifPresent(analysis -> {
+            analysis.setDirty(true);
+            lifestyleAnalysisRepository.save(analysis);
+        });
+    }
 
     private User getAuthenticatedUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -69,6 +77,7 @@ public class ExpenseController {
         }
         
         Expense saved = expenseRepository.save(expense);
+        invalidateLifestyleAnalysisCache(user);
         return ResponseEntity.ok(saved);
     }
 
@@ -83,6 +92,7 @@ public class ExpenseController {
         Expense expense = parseExpenseFromText(text.trim(), user);
         
         Expense saved = expenseRepository.save(expense);
+        invalidateLifestyleAnalysisCache(user);
         return ResponseEntity.ok(saved);
     }
 
@@ -298,6 +308,7 @@ public class ExpenseController {
                 .build();
         
         Expense saved = expenseRepository.save(expense);
+        invalidateLifestyleAnalysisCache(user);
         return ResponseEntity.ok(saved);
     }
 
@@ -323,6 +334,7 @@ public class ExpenseController {
                 .build();
         
         Expense saved = expenseRepository.save(expense);
+        invalidateLifestyleAnalysisCache(user);
         return ResponseEntity.ok(saved);
     }
 
@@ -337,6 +349,7 @@ public class ExpenseController {
         }
         
         expenseRepository.deleteById(id);
+        invalidateLifestyleAnalysisCache(user);
         return ResponseEntity.ok().build();
     }
 }

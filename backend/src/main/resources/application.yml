@@ -5,9 +5,9 @@ spring:
   application:
     name: finpilot-ai
   datasource:
-    url: jdbc:mysql://localhost:3306/finpilot?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Kolkata&allowPublicKeyRetrieval=true
-    username: root
-    password: 9345568849
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/finpilot?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=Asia/Kolkata&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:9345568849}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     generate-ddl: true

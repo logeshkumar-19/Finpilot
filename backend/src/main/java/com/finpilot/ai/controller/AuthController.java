@@ -22,10 +22,30 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
+    public static boolean isValidPassword(String password) {
+        if (password == null || password.length() < 8) return false;
+        boolean hasUpper = false;
+        boolean hasLower = false;
+        boolean hasDigit = false;
+        boolean hasSpecial = false;
+        String specialChars = "!@#$%^&*()_+-=[]{}|;:',.<>?";
+        for (char c : password.toCharArray()) {
+            if (Character.isUpperCase(c)) hasUpper = true;
+            else if (Character.isLowerCase(c)) hasLower = true;
+            else if (Character.isDigit(c)) hasDigit = true;
+            else if (specialChars.indexOf(c) >= 0) hasSpecial = true;
+        }
+        return hasUpper && hasLower && hasDigit && hasSpecial;
+    }
+
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            return ResponseEntity.badRequest().body("Email already registered!");
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", "Email already registered!"));
+        }
+
+        if (!isValidPassword(request.getPassword())) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", "Password must contain at least one uppercase letter, one lowercase letter, one number, one special character, and be at least 8 characters long."));
         }
 
         User user = User.builder()

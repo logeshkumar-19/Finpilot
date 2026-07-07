@@ -7,6 +7,8 @@ import com.finpilot.ai.dto.SimulationResponse;
 import com.finpilot.ai.model.Expense;
 import com.finpilot.ai.model.FinancialGoal;
 import com.finpilot.ai.model.SpendingProfile;
+import com.finpilot.ai.model.LifestyleAnalysis;
+import com.finpilot.ai.model.User;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -579,5 +581,186 @@ public class AIService {
         } catch (Exception e) {
             return String.format("Expense logged: ₹%s at %s (%s).", amount, merchant, category);
         }
+    }
+
+    public LifestyleAnalysis generateLifestyleAnalysis(List<Expense> expenses, BigDecimal monthlyIncome, User user) {
+        LocalDate thirtyDaysAgo = LocalDate.now().minusDays(30);
+        BigDecimal totalSpent = BigDecimal.ZERO;
+        BigDecimal weekendSpent = BigDecimal.ZERO;
+        BigDecimal weekdaySpent = BigDecimal.ZERO;
+        BigDecimal largestSingleExpense = BigDecimal.ZERO;
+        
+        Map<String, BigDecimal> categorySums = new HashMap<>();
+        Map<String, Integer> categoryCounts = new HashMap<>();
+        
+        int smallRecurringCount = 0;
+        BigDecimal smallRecurringTotal = BigDecimal.ZERO;
+
+        for (Expense e : expenses) {
+            if (e.getTransactionDate() != null && !e.getTransactionDate().isBefore(thirtyDaysAgo)) {
+                BigDecimal amt = e.getAmount() != null ? e.getAmount() : BigDecimal.ZERO;
+                totalSpent = totalSpent.add(amt);
+
+                // Weekday / Weekend (SATURDAY/SUNDAY are weekends)
+                java.time.DayOfWeek dow = e.getTransactionDate().getDayOfWeek();
+                if (dow == java.time.DayOfWeek.SATURDAY || dow == java.time.DayOfWeek.SUNDAY) {
+                    weekendSpent = weekendSpent.add(amt);
+                } else {
+                    weekdaySpent = weekdaySpent.add(amt);
+                }
+
+                // Largest single expense
+                if (amt.compareTo(largestSingleExpense) > 0) {
+                    largestSingleExpense = amt;
+                }
+
+                // Small recurring expenses (amount < 1000 and isRecurring is true)
+                if (Boolean.TRUE.equals(e.getIsRecurring()) && amt.compareTo(new BigDecimal("1000")) < 0) {
+                    smallRecurringCount++;
+                    smallRecurringTotal = smallRecurringTotal.add(amt);
+                }
+
+                // Category grouping
+                String category = e.getCategory() != null ? e.getCategory() : "Others";
+                categorySums.put(category, categorySums.getOrDefault(category, BigDecimal.ZERO).add(amt));
+                categoryCounts.put(category, categoryCounts.getOrDefault(category, 0) + 1);
+            }
+        }
+
+        BigDecimal avgDailySpending = totalSpent.divide(new BigDecimal("30"), 2, RoundingMode.HALF_UP);
+
+        // Highest and lowest spending categories
+        String highestCategory = "None";
+        BigDecimal maxCatSpent = BigDecimal.ZERO;
+        String lowestCategory = "None";
+        BigDecimal minCatSpent = null;
+
+        for (Map.Entry<String, BigDecimal> entry : categorySums.entrySet()) {
+            BigDecimal amt = entry.getValue();
+            if (amt.compareTo(maxCatSpent) > 0) {
+                maxCatSpent = amt;
+                highestCategory = entry.getKey();
+            }
+            if (minCatSpent == null || amt.compareTo(minCatSpent) < 0) {
+                minCatSpent = amt;
+                lowestCategory = entry.getKey();
+            }
+        }
+        if (lowestCategory.equals("None") && !categorySums.isEmpty()) {
+            lowestCategory = categorySums.keySet().iterator().next();
+        }
+
+        // Most frequent category
+        String mostFrequentCategory = "None";
+        int maxCount = 0;
+        for (Map.Entry<String, Integer> entry : categoryCounts.entrySet()) {
+            if (entry.getValue() > maxCount) {
+                maxCount = entry.getValue();
+                mostFrequentCategory = entry.getKey();
+            }
+        }
+
+        BigDecimal income = (monthlyIncome != null && monthlyIncome.compareTo(BigDecimal.ZERO) > 0) ? monthlyIncome : new BigDecimal("50000");
+        
+        // Calculate wellness score
+        int wellnessScore = 100;
+        if (income.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal spentRatio = totalSpent.divide(income, 2, RoundingMode.HALF_UP);
+            if (spentRatio.compareTo(new BigDecimal("1.0")) > 0) {
+                wellnessScore = Math.max(30, 100 - spentRatio.subtract(BigDecimal.ONE).multiply(new BigDecimal("100")).intValue());
+            } else {
+                wellnessScore = 100 - spentRatio.multiply(new BigDecimal("50")).intValue();
+            }
+        }
+        wellnessScore = Math.min(100, Math.max(0, wellnessScore));
+
+        if (isMockApiKey()) {
+            return generateLifestyleAnalysisFallback(totalSpent, avgDailySpending, highestCategory, maxCatSpent, 
+                    lowestCategory, minCatSpent, mostFrequentCategory, maxCount, weekendSpent, weekdaySpent, 
+                    largestSingleExpense, smallRecurringCount, smallRecurringTotal, income, wellnessScore, user);
+        }
+
+        try {
+            String systemPrompt = "You are an AI Financial Coach.\n" +
+                    "Analyze the user's spending over the last 30 days and generate personalized financial observations.\n" +
+                    "Respond with strict JSON matching the following schema:\n" +
+                    "{\n" +
+                    "  \"personalityType\": \"Spending Personality (e.g. Balanced Saver, Weekend Splurger, Prudent Planner, Impulse Buyer)\",\n" +
+                    "  \"biggestSpendingHabit\": \"Description of the biggest spending habit/category based on stats\",\n" +
+                    "  \"positiveHabit\": \"One positive financial habit\",\n" +
+                    "  \"improvementSuggestion\": \"One area that needs improvement\",\n" +
+                    "  \"savingsOpportunity\": \"One savings opportunity\",\n" +
+                    "  \"wellnessScore\": 85,\n" +
+                    "  \"aiSummary\": \"A concise summary of their overall spending archetype and health over the last 30 days\"\n" +
+                    "}\n" +
+                    "Keep responses concise. The total length of the JSON string values must be under 150 words.";
+
+            String userContent = String.format(
+                    "Income: ₹%s\n" +
+                    "Total Spending: ₹%s\n" +
+                    "Average Daily Spending: ₹%s\n" +
+                    "Highest Spending Category: %s (₹%s)\n" +
+                    "Lowest Spending Category: %s (₹%s)\n" +
+                    "Most Frequent Category: %s (%d transactions)\n" +
+                    "Weekend Spending: ₹%s\n" +
+                    "Weekday Spending: ₹%s\n" +
+                    "Largest Single Expense: ₹%s\n" +
+                    "Small Recurring Expenses: %d transactions (Total ₹%s)\n" +
+                    "Outflow breakdown by category:\n%s",
+                    income, totalSpent, avgDailySpending, highestCategory, maxCatSpent, lowestCategory, 
+                    minCatSpent != null ? minCatSpent : BigDecimal.ZERO, mostFrequentCategory, maxCount, 
+                    weekendSpent, weekdaySpent, largestSingleExpense, smallRecurringCount, smallRecurringTotal, categorySums
+            );
+
+            String jsonResponse = queryGroq(systemPrompt, userContent, true);
+            JsonNode root = objectMapper.readTree(jsonResponse);
+
+            return LifestyleAnalysis.builder()
+                    .user(user)
+                    .personalityType(root.path("personalityType").asText("Balanced Saver"))
+                    .biggestSpendingHabit(root.path("biggestSpendingHabit").asText(highestCategory))
+                    .positiveHabit(root.path("positiveHabit").asText("You consistently control expenses in minor categories."))
+                    .improvementSuggestion(root.path("improvementSuggestion").asText("Watch out for weekend discretionary spending."))
+                    .savingsOpportunity(root.path("savingsOpportunity").asText("Consider cutting back on restaurant deliveries."))
+                    .wellnessScore(root.has("wellnessScore") ? root.get("wellnessScore").asInt() : wellnessScore)
+                    .aiSummary(root.path("aiSummary").asText("No summary generated."))
+                    .isDirty(false)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("AI Lifestyle Analysis generation failed, falling back to deterministic", e);
+            return generateLifestyleAnalysisFallback(totalSpent, avgDailySpending, highestCategory, maxCatSpent, 
+                    lowestCategory, minCatSpent, mostFrequentCategory, maxCount, weekendSpent, weekdaySpent, 
+                    largestSingleExpense, smallRecurringCount, smallRecurringTotal, income, wellnessScore, user);
+        }
+    }
+
+    private LifestyleAnalysis generateLifestyleAnalysisFallback(BigDecimal totalSpent, BigDecimal avgDailySpending,
+                                                                 String highestCategory, BigDecimal maxCatSpent,
+                                                                 String lowestCategory, BigDecimal minCatSpent,
+                                                                 String mostFrequentCategory, int maxCount,
+                                                                 BigDecimal weekendSpent, BigDecimal weekdaySpent,
+                                                                 BigDecimal largestSingleExpense, int smallRecurringCount,
+                                                                 BigDecimal smallRecurringTotal, BigDecimal income, int wellnessScore, User user) {
+        String personality = weekendSpent.compareTo(weekdaySpent) > 0 ? "Weekend Splurger" : "Balanced Saver";
+        String positive = String.format("You consistently control transportation and other expenses, keeping %s lowest.", lowestCategory);
+        String improvement = String.format("Spending in %s is your highest outflow at ₹%s.", highestCategory, maxCatSpent.setScale(0, RoundingMode.HALF_UP));
+        String opportunity = String.format("Reducing spending in %s by 15%% could save approximately ₹%s every month.", 
+                highestCategory, maxCatSpent.multiply(new BigDecimal("0.15")).setScale(0, RoundingMode.HALF_UP));
+        String summary = String.format("Over the last 30 days, your average daily spending was ₹%s. Your largest single expense was ₹%s, and you spent ₹%s on weekdays compared to ₹%s on weekends.",
+                avgDailySpending.setScale(0, RoundingMode.HALF_UP), largestSingleExpense.setScale(0, RoundingMode.HALF_UP),
+                weekdaySpent.setScale(0, RoundingMode.HALF_UP), weekendSpent.setScale(0, RoundingMode.HALF_UP));
+
+        return LifestyleAnalysis.builder()
+                .user(user)
+                .personalityType(personality)
+                .biggestSpendingHabit(highestCategory + " (₹" + maxCatSpent.setScale(0, RoundingMode.HALF_UP) + ")")
+                .positiveHabit(positive)
+                .improvementSuggestion(improvement)
+                .savingsOpportunity(opportunity)
+                .wellnessScore(wellnessScore)
+                .aiSummary(summary)
+                .isDirty(false)
+                .build();
     }
 }

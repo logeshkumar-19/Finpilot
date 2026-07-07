@@ -4,6 +4,7 @@ import com.finpilot.ai.model.MonthlyIncome;
 import com.finpilot.ai.model.User;
 import com.finpilot.ai.repository.MonthlyIncomeRepository;
 import com.finpilot.ai.repository.UserRepository;
+import com.finpilot.ai.repository.LifestyleAnalysisRepository;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -25,6 +26,15 @@ public class IncomeController {
 
     private final UserRepository userRepository;
     private final MonthlyIncomeRepository monthlyIncomeRepository;
+    private final LifestyleAnalysisRepository lifestyleAnalysisRepository;
+
+    private void invalidateLifestyleAnalysisCache(User user) {
+        if (user == null) return;
+        lifestyleAnalysisRepository.findByUserId(user.getId()).ifPresent(analysis -> {
+            analysis.setDirty(true);
+            lifestyleAnalysisRepository.save(analysis);
+        });
+    }
 
     private User getAuthenticatedUser(Principal principal) {
         if (principal == null) return null;
@@ -60,6 +70,7 @@ public class IncomeController {
                 .build();
 
         monthlyIncomeRepository.save(income);
+        invalidateLifestyleAnalysisCache(user);
         return ResponseEntity.ok(income);
     }
 
@@ -102,6 +113,7 @@ public class IncomeController {
         }
         
         monthlyIncomeRepository.save(income);
+        invalidateLifestyleAnalysisCache(user);
         return ResponseEntity.ok(income);
     }
 
